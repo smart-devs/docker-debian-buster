@@ -1,0 +1,8 @@
+*~
+.DS_Store
+.*
+*.env
+
+junit*.xml
+hadlont.json
+shellcheck.json

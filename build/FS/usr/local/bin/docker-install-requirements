@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+
+set -o errexit  # Exit script when a command exits with non-zero status
+set -o errtrace # Exit on error inside any functions or sub-shells
+set -o nounset  # Exit script on use of an undefined variable
+set -o pipefail # Return exit status of the last command in the pipe that failed
+
+# ------------------------------------------------------------------------------
+# Displays a status message
+#
+# Arguments:
+#   $* Status message to display
+# Returns:
+#   Exit code
+# ------------------------------------------------------------------------------
+display_status_message() {
+  local status=$*
+
+  echo "-----> ${status}"
+}
+
+# ------------------------------------------------------------------------------
+# get apt package requirements from env vars
+#
+# Arguments:
+#   $1 Filter prefix
+#   $2 BUILD or Runtime
+# Returns:
+#   string
+# ------------------------------------------------------------------------------
+get_requirements() {
+  #printf "'%s'='%s'\n" "$n" "$v"
+  while IFS='=' read -r -d '' n v; do
+    if [[ "$n" == "${1^^}_${2^^}_REQUIREMENTS"* ]]; then
+        echo "${v}"
+    fi
+  done < <(env -0)
+}
+
+apt-get update -y || true
+
+display_status_message "Installing runtime requirements"
+for REQUIREMENT in $(get_requirements "${1:-container}" "runtime"); do
+    apt-get install -y "${REQUIREMENT}"
+done
+
+display_status_message "Installing build requirements"
+for REQUIREMENT in $(get_requirements "${1:-container}"  "build"); do
+    if ! dpkg -l | grep -P "^ii(?:[\s]{2})${REQUIREMENT//=*}(:?\:.*)?(?:[\s]+).*(?:all|amd64).*$" > /dev/null 2>&1; then
+        apt-get install -y "${REQUIREMENT}"
+        apt-mark auto "${REQUIREMENT}"
+    else
+        echo "Package ${REQUIREMENT} already installed skipping automatic remove during cleanup."
+        apt-get install -y "${REQUIREMENT}"
+    fi
+done
+apt-get update -y || true
+display_status_message "Installing container requirements finished"
